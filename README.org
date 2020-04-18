@@ -1,0 +1,18 @@
+* queued-build-hook - a Nix post-build-hook with some superpowers
+
+This is a simple client/daemon combination that allows configurable retries & async queueing of post-build-hooks.
+
+** Hacking
+
+Start daemon
+#+begin_src sh
+go build
+rm -f testsock
+systemfd -s unix::./testsock -- ./queued-build-hook daemon --hook ./realhook.sh
+#+end_src
+
+Run client
+#+begin_src sh
+go build
+./queued-build-hook queue --socket ./testsock
+#+end_src

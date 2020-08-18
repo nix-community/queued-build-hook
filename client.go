@@ -8,10 +8,10 @@ import (
 
 func RunClient(sock string) error {
 	c, err := net.Dial("unix", sock)
-	defer c.Close()
 	if err != nil {
 		return err
 	}
+	defer c.Close()
 
 	m := message{}
 	m.DrvPath = os.Getenv("DRV_PATH")

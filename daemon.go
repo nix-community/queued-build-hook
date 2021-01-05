@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+type Waiter struct {
+	Reply chan struct{}
+	Tag   string
+}
+
 func RunDaemon(stderr *log.Logger, realHook string, retryInterval int, retries int) {
 
 	listeners, err := ListenSystemdFds()
@@ -24,9 +29,10 @@ func RunDaemon(stderr *log.Logger, realHook string, retryInterval int, retries i
 	connections := make(chan net.Conn)
 	queueRequests := make(chan *QueueMessage)
 	queueCompleted := make(chan *QueueMessage)
-	waitRequests := make(chan chan struct{})
-	waiters := []chan struct{}{}
+	waitRequests := make(chan *Waiter)
+	waiters := []*Waiter{}
 	inProgress := 0
+	inProgressTags := make(map[string]int)
 
 	for _, listener := range listeners {
 		go func(l net.Listener) {
@@ -63,14 +69,22 @@ func RunDaemon(stderr *log.Logger, realHook string, retryInterval int, retries i
 				case *QueueMessage:
 					queueRequests <- m
 				case *WaitMessage:
-					waiter := make(chan struct{})
-					waitRequests <- waiter
-					<-waiter
+					reply := make(chan struct{})
+					waitRequests <- &Waiter{
+						Reply: reply,
+						Tag:   m.Tag,
+					}
+					<-reply
 				}
 			}()
 
 		case m := <-queueRequests:
 			inProgress += 1
+			if m.Tag != "" {
+				n, _ := inProgressTags[m.Tag]
+				inProgressTags[m.Tag] = n + 1
+			}
+
 			go func() {
 				defer func() {
 					queueCompleted <- m
@@ -110,21 +124,48 @@ func RunDaemon(stderr *log.Logger, realHook string, retryInterval int, retries i
 				stderr.Print(errorMessage)
 			}()
 
-		case <-queueCompleted:
+		case m := <-queueCompleted:
 			inProgress -= 1
 			if inProgress == 0 {
+				// No jobs at all means there are also no tagged jobs.
 				for _, waiter := range waiters {
-					waiter <- struct{}{}
+					waiter.Reply <- struct{}{}
 				}
-				waiters = []chan struct{}{}
+				waiters = []*Waiter{}
+				inProgressTags = make(map[string]int)
+
+			} else if m.Tag != "" {
+				n := inProgressTags[m.Tag] - 1
+				if n > 0 {
+					inProgressTags[m.Tag] = n
+				} else {
+					// Reply and remove just waiters for this tag.
+					delete(inProgressTags, m.Tag)
+					newWaiters := []*Waiter{}
+					for _, w := range waiters {
+						if w.Tag == m.Tag {
+							w.Reply <- struct{}{}
+						} else {
+							newWaiters = append(newWaiters, w)
+						}
+					}
+					waiters = newWaiters
+				}
 			}
 
-		case waiter := <-waitRequests:
+		case w := <-waitRequests:
 			if inProgress == 0 {
-				waiter <- struct{}{}
-			} else {
-				waiters = append(waiters, waiter)
+				w.Reply <- struct{}{}
+				break
 			}
+			if w.Tag != "" {
+				n, _ := inProgressTags[w.Tag]
+				if n == 0 {
+					w.Reply <- struct{}{}
+					break
+				}
+			}
+			waiters = append(waiters, w)
 		}
 	}
 

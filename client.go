@@ -37,13 +37,16 @@ func runClient(sock string, m interface{}) error {
 	return nil
 }
 
-func RunQueueClient(sock string) error {
+func RunQueueClient(sock string, tag string) error {
 	return runClient(sock, &QueueMessage{
 		DrvPath:  os.Getenv("DRV_PATH"),
 		OutPaths: os.Getenv("OUT_PATHS"),
+		Tag:      tag,
 	})
 }
 
-func RunWaitClient(sock string) error {
-	return runClient(sock, &WaitMessage{})
+func RunWaitClient(sock string, tag string) error {
+	return runClient(sock, &WaitMessage{
+		Tag: tag,
+	})
 }

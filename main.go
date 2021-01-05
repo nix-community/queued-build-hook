@@ -18,9 +18,11 @@ func main() {
 
 	queueCommand := flag.NewFlagSet("queue", flag.ExitOnError)
 	queueSockPath := queueCommand.String("socket", "", "Path to daemon socket")
+	queueTag := queueCommand.String("tag", "", "Optional tag, for use with wait")
 
 	waitCommand := flag.NewFlagSet("wait", flag.ExitOnError)
 	waitSockPath := waitCommand.String("socket", "", "Path to daemon socket")
+	waitTag := waitCommand.String("tag", "", "Optional tag to filter on")
 
 	printDefaults := func() {
 		fmt.Println(fmt.Sprintf("Usage: \"%s daemon\", \"%s queue\" \"%s wait\"", os.Args[0], os.Args[0], os.Args[0]))
@@ -61,7 +63,7 @@ func main() {
 			panic("Missing required flag socket")
 		}
 
-		err := RunQueueClient(sock)
+		err := RunQueueClient(sock, *queueTag)
 		if err != nil {
 			panic(err)
 		}
@@ -72,7 +74,7 @@ func main() {
 			panic("Missing required flag socket")
 		}
 
-		err := RunWaitClient(sock)
+		err := RunWaitClient(sock, *waitTag)
 		if err != nil {
 			panic(err)
 		}

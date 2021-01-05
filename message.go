@@ -13,9 +13,12 @@ type envelope struct {
 type QueueMessage struct {
 	DrvPath  string `json:"DRV_PATH"`
 	OutPaths string `json:"OUT_PATHS"`
+	Tag      string `json:"TAG"`
 }
 
-type WaitMessage struct{}
+type WaitMessage struct {
+	Tag string `json:"TAG"`
+}
 
 func EncodeMessage(m interface{}) ([]byte, error) {
 	switch m := m.(type) {

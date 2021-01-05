@@ -17,16 +17,22 @@ func main() {
 	retries := daemonCommand.Int("retries", 5, "How many retries to attempt before dropping")
 
 	queueCommand := flag.NewFlagSet("queue", flag.ExitOnError)
-	sockPath := queueCommand.String("socket", "", "Path to daemon socket")
+	queueSockPath := queueCommand.String("socket", "", "Path to daemon socket")
+
+	waitCommand := flag.NewFlagSet("wait", flag.ExitOnError)
+	waitSockPath := waitCommand.String("socket", "", "Path to daemon socket")
 
 	printDefaults := func() {
-		fmt.Println(fmt.Sprintf("Usage: \"%s daemon\" or \"%s queue\"", os.Args[0], os.Args[0]))
+		fmt.Println(fmt.Sprintf("Usage: \"%s daemon\", \"%s queue\" \"%s wait\"", os.Args[0], os.Args[0], os.Args[0]))
 
 		fmt.Println("\nUsage of daemon:")
 		daemonCommand.PrintDefaults()
 
 		fmt.Println("\nUsage of queue:")
 		queueCommand.PrintDefaults()
+
+		fmt.Println("\nUsage of wait:")
+		waitCommand.PrintDefaults()
 	}
 
 	if len(os.Args) <= 1 {
@@ -38,6 +44,8 @@ func main() {
 		daemonCommand.Parse(os.Args[2:])
 	case "queue":
 		queueCommand.Parse(os.Args[2:])
+	case "wait":
+		waitCommand.Parse(os.Args[2:])
 	}
 
 	if daemonCommand.Parsed() {
@@ -48,12 +56,23 @@ func main() {
 		RunDaemon(stderr, hook, *retryInterval, *retries)
 
 	} else if queueCommand.Parsed() {
-		sock := *sockPath
+		sock := *queueSockPath
 		if sock == "" {
 			panic("Missing required flag socket")
 		}
 
-		err := RunClient(sock)
+		err := RunQueueClient(sock)
+		if err != nil {
+			panic(err)
+		}
+
+	} else if waitCommand.Parsed() {
+		sock := *waitSockPath
+		if sock == "" {
+			panic("Missing required flag socket")
+		}
+
+		err := RunWaitClient(sock)
 		if err != nil {
 			panic(err)
 		}

@@ -2,35 +2,63 @@ package main
 
 import (
 	"encoding/json"
-	"time"
+	"errors"
 )
 
-type message struct {
+type envelope struct {
+	Action  string
+	Payload json.RawMessage
+}
+
+type QueueMessage struct {
 	DrvPath  string `json:"DRV_PATH"`
 	OutPaths string `json:"OUT_PATHS"`
 }
 
-type QueuedMessage struct {
-	IncomingTime int64
-	Retries      int
-	DrvPath      string
-	OutPaths     string
+type WaitMessage struct{}
+
+func EncodeMessage(m interface{}) ([]byte, error) {
+	switch m := m.(type) {
+	case *QueueMessage:
+		b, err := json.Marshal(m)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(envelope{
+			Action:  "queue",
+			Payload: b,
+		})
+	case *WaitMessage:
+		b, err := json.Marshal(m)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(envelope{
+			Action:  "wait",
+			Payload: b,
+		})
+	default:
+		return nil, errors.New("Invalid message")
+	}
 }
 
-func DecodeMessage(b []byte, retries int) (*QueuedMessage, error) {
-
-	m := message{}
-	err := json.Unmarshal(b, &m)
+func DecodeMessage(b []byte) (interface{}, error) {
+	env := envelope{}
+	err := json.Unmarshal(b, &env)
 	if err != nil {
 		return nil, err
 	}
 
-	q := &QueuedMessage{
-		IncomingTime: time.Now().Unix(),
-		Retries:      retries,
-		DrvPath:      m.DrvPath,
-		OutPaths:     m.OutPaths,
+	switch env.Action {
+	case "queue":
+		m := &QueueMessage{}
+		err := json.Unmarshal(env.Payload, m)
+		return m, err
+	case "wait":
+		m := &WaitMessage{}
+		err := json.Unmarshal(env.Payload, m)
+		return m, err
+	default:
+		return nil, errors.New("Invalid action")
 	}
-	return q, nil
-
 }

@@ -22,6 +22,11 @@ func RunDaemon(stderr *log.Logger, realHook string, retryInterval int, retries i
 	}
 
 	connections := make(chan net.Conn)
+	queueRequests := make(chan *QueueMessage)
+	queueCompleted := make(chan *QueueMessage)
+	waitRequests := make(chan chan struct{})
+	waiters := []chan struct{}{}
+	inProgress := 0
 
 	for _, listener := range listeners {
 		go func(l net.Listener) {
@@ -48,11 +53,28 @@ func RunDaemon(stderr *log.Logger, realHook string, retryInterval int, retries i
 					return
 				}
 
-				m, err := DecodeMessage(b, retries)
+				m, err := DecodeMessage(b)
 				if err != nil {
 					stderr.Print(err)
 					return
 				}
+
+				switch m := m.(type) {
+				case *QueueMessage:
+					queueRequests <- m
+				case *WaitMessage:
+					waiter := make(chan struct{})
+					waitRequests <- waiter
+					<-waiter
+				}
+			}()
+
+		case m := <-queueRequests:
+			inProgress += 1
+			go func() {
+				defer func() {
+					queueCompleted <- m
+				}()
 
 				env := os.Environ()
 				if m.DrvPath != "" {
@@ -62,14 +84,15 @@ func RunDaemon(stderr *log.Logger, realHook string, retryInterval int, retries i
 					env = append(env, fmt.Sprintf("OUT_PATHS=%s", m.OutPaths))
 				}
 
-				for m.Retries != 0 {
+				msgRetries := retries
+				for msgRetries != 0 {
 					cmd := exec.Command(realHook)
 					cmd.Stdout = os.Stdout
 					cmd.Stderr = os.Stderr
 					cmd.Env = env
 					err := cmd.Run()
 					if err != nil {
-						m.Retries -= 1
+						msgRetries -= 1
 						time.Sleep(time.Duration(retryInterval) * time.Second)
 						continue
 					}
@@ -85,8 +108,23 @@ func RunDaemon(stderr *log.Logger, realHook string, retryInterval int, retries i
 				}
 				errorMessage = fmt.Sprintf("%s after %d retries", errorMessage, retries)
 				stderr.Print(errorMessage)
-
 			}()
+
+		case <-queueCompleted:
+			inProgress -= 1
+			if inProgress == 0 {
+				for _, waiter := range waiters {
+					waiter <- struct{}{}
+				}
+				waiters = []chan struct{}{}
+			}
+
+		case waiter := <-waitRequests:
+			if inProgress == 0 {
+				waiter <- struct{}{}
+			} else {
+				waiters = append(waiters, waiter)
+			}
 		}
 	}
 

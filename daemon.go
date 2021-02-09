@@ -15,8 +15,13 @@ type Waiter struct {
 	Tag   string
 }
 
-func RunDaemon(stderr *log.Logger, realHook string, retryInterval int, retries int) {
+type DaemonConfig struct {
+	RetryInterval int
+	Retries       int
+	Concurrency   int
+}
 
+func RunDaemon(stderr *log.Logger, realHook string, config *DaemonConfig) {
 	listeners, err := ListenSystemdFds()
 	if err != nil {
 		panic(err)
@@ -26,14 +31,82 @@ func RunDaemon(stderr *log.Logger, realHook string, retryInterval int, retries i
 		panic("Unexpected number of socket activation fds")
 	}
 
-	connections := make(chan net.Conn)
-	queueRequests := make(chan *QueueMessage)
-	queueCompleted := make(chan *QueueMessage)
-	waitRequests := make(chan *Waiter)
+	// State variables, accessed only from the main goroutine.
 	waiters := []*Waiter{}
 	inProgress := 0
 	inProgressTags := make(map[string]int)
 
+	// Channels for communicating with the main goroutine.
+	connections := make(chan net.Conn)
+	queueRequests := make(chan *QueueMessage)
+	queueCompleted := make(chan *QueueMessage)
+	waitRequests := make(chan *Waiter)
+
+	// Channel for communicating with workers.
+	workerRequests := make(chan *QueueMessage, 256)
+
+	// Execute hook for one request.
+	execOne := func(m *QueueMessage) {
+		defer func() {
+			queueCompleted <- m
+		}()
+
+		env := os.Environ()
+		if m.DrvPath != "" {
+			env = append(env, fmt.Sprintf("DRV_PATH=%s", m.DrvPath))
+		}
+		if m.OutPaths != "" {
+			env = append(env, fmt.Sprintf("OUT_PATHS=%s", m.OutPaths))
+		}
+
+		msgRetries := config.Retries
+		for msgRetries != 0 {
+			cmd := exec.Command(realHook)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Env = env
+			err := cmd.Run()
+			if err != nil {
+				msgRetries -= 1
+				time.Sleep(time.Duration(config.RetryInterval) * time.Second)
+				continue
+			}
+			return
+		}
+
+		errorMessage := "Dropped message"
+		if m.DrvPath != "" {
+			errorMessage = fmt.Sprintf("%s with DRV_PATH '%s'", errorMessage, m.DrvPath)
+		}
+		if m.OutPaths != "" {
+			errorMessage = fmt.Sprintf("%s with OUT_PATHS '%s'", errorMessage, m.OutPaths)
+		}
+		errorMessage = fmt.Sprintf("%s after %d retries", errorMessage, config.Retries)
+		stderr.Print(errorMessage)
+	}
+
+	// Worker goroutines.
+	if config.Concurrency > 0 {
+		worker := func() {
+			for {
+				m := <-workerRequests
+				execOne(m)
+			}
+		}
+		for i := 0; i < config.Concurrency; i++ {
+			go worker()
+		}
+	} else {
+		// Infinite concurrency.
+		go func() {
+			for {
+				m := <-workerRequests
+				go execOne(m)
+			}
+		}()
+	}
+
+	// Launch a goroutine for each listener.
 	for _, listener := range listeners {
 		go func(l net.Listener) {
 			for {
@@ -50,6 +123,7 @@ func RunDaemon(stderr *log.Logger, realHook string, retryInterval int, retries i
 	for {
 		select {
 		case c := <-connections:
+			// Launch a goroutine for each connection.
 			go func() {
 				defer c.Close()
 
@@ -79,52 +153,17 @@ func RunDaemon(stderr *log.Logger, realHook string, retryInterval int, retries i
 			}()
 
 		case m := <-queueRequests:
+			// Forward requests to workers, and track progress.
 			inProgress += 1
 			if m.Tag != "" {
 				n, _ := inProgressTags[m.Tag]
 				inProgressTags[m.Tag] = n + 1
 			}
 
-			go func() {
-				defer func() {
-					queueCompleted <- m
-				}()
-
-				env := os.Environ()
-				if m.DrvPath != "" {
-					env = append(env, fmt.Sprintf("DRV_PATH=%s", m.DrvPath))
-				}
-				if m.OutPaths != "" {
-					env = append(env, fmt.Sprintf("OUT_PATHS=%s", m.OutPaths))
-				}
-
-				msgRetries := retries
-				for msgRetries != 0 {
-					cmd := exec.Command(realHook)
-					cmd.Stdout = os.Stdout
-					cmd.Stderr = os.Stderr
-					cmd.Env = env
-					err := cmd.Run()
-					if err != nil {
-						msgRetries -= 1
-						time.Sleep(time.Duration(retryInterval) * time.Second)
-						continue
-					}
-					return
-				}
-
-				errorMessage := "Dropped message"
-				if m.DrvPath != "" {
-					errorMessage = fmt.Sprintf("%s with DRV_PATH '%s'", errorMessage, m.DrvPath)
-				}
-				if m.OutPaths != "" {
-					errorMessage = fmt.Sprintf("%s with OUT_PATHS '%s'", errorMessage, m.OutPaths)
-				}
-				errorMessage = fmt.Sprintf("%s after %d retries", errorMessage, retries)
-				stderr.Print(errorMessage)
-			}()
+			workerRequests <- m
 
 		case m := <-queueCompleted:
+			// Scheduler sends us completion.
 			inProgress -= 1
 			if inProgress == 0 {
 				// No jobs at all means there are also no tagged jobs.
@@ -154,6 +193,7 @@ func RunDaemon(stderr *log.Logger, realHook string, retryInterval int, retries i
 			}
 
 		case w := <-waitRequests:
+			// A connection wants to wait on the queue.
 			if inProgress == 0 {
 				w.Reply <- struct{}{}
 				break

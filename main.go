@@ -15,6 +15,7 @@ func main() {
 	realHook := daemonCommand.String("hook", "", "Path to the 'real' post-build-hook")
 	retryInterval := daemonCommand.Int("retry-interval", 1, "Retry interval (in seconds)")
 	retries := daemonCommand.Int("retries", 5, "How many retries to attempt before dropping")
+	concurrency := daemonCommand.Int("concurrency", 0, "How many jobs to run in parallel (default 0 / infinite)")
 
 	queueCommand := flag.NewFlagSet("queue", flag.ExitOnError)
 	queueSockPath := queueCommand.String("socket", "", "Path to daemon socket")
@@ -55,7 +56,11 @@ func main() {
 		if hook == "" {
 			panic("Missing required flag hook")
 		}
-		RunDaemon(stderr, hook, *retryInterval, *retries)
+		RunDaemon(stderr, hook, &DaemonConfig{
+			RetryInterval: *retryInterval,
+			Retries:       *retries,
+			Concurrency:   *concurrency,
+		})
 
 	} else if queueCommand.Parsed() {
 		sock := *queueSockPath

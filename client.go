@@ -1,31 +1,52 @@
 package main
 
 import (
-	"encoding/json"
 	"net"
 	"os"
 )
 
-func RunClient(sock string) error {
-	c, err := net.Dial("unix", sock)
-	if err != nil {
-		return err
-	}
-	defer c.Close()
-
-	m := message{}
-	m.DrvPath = os.Getenv("DRV_PATH")
-	m.OutPaths = os.Getenv("OUT_PATHS")
-
-	payload, err := json.Marshal(m)
+func runClient(sock string, m interface{}) error {
+	b, err := EncodeMessage(m)
 	if err != nil {
 		return err
 	}
 
-	_, err = c.Write(payload)
+	conn, err := net.Dial("unix", sock)
 	if err != nil {
+		return err
+	}
+
+	unixConn := conn.(*net.UnixConn)
+	defer unixConn.Close()
+
+	// Write the message and send EOF.
+	_, err = unixConn.Write(b)
+	if err != nil {
+		return err
+	}
+	if err := unixConn.CloseWrite(); err != nil {
+		return err
+	}
+
+	// Wait for remote to close the connection.
+	_, err = unixConn.Read([]byte{0})
+	if err != nil && err.Error() != "EOF" {
 		return err
 	}
 
 	return nil
+}
+
+func RunQueueClient(sock string, tag string) error {
+	return runClient(sock, &QueueMessage{
+		DrvPath:  os.Getenv("DRV_PATH"),
+		OutPaths: os.Getenv("OUT_PATHS"),
+		Tag:      tag,
+	})
+}
+
+func RunWaitClient(sock string, tag string) error {
+	return runClient(sock, &WaitMessage{
+		Tag: tag,
+	})
 }

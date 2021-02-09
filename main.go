@@ -15,18 +15,27 @@ func main() {
 	realHook := daemonCommand.String("hook", "", "Path to the 'real' post-build-hook")
 	retryInterval := daemonCommand.Int("retry-interval", 1, "Retry interval (in seconds)")
 	retries := daemonCommand.Int("retries", 5, "How many retries to attempt before dropping")
+	concurrency := daemonCommand.Int("concurrency", 0, "How many jobs to run in parallel (default 0 / infinite)")
 
 	queueCommand := flag.NewFlagSet("queue", flag.ExitOnError)
-	sockPath := queueCommand.String("socket", "", "Path to daemon socket")
+	queueSockPath := queueCommand.String("socket", "", "Path to daemon socket")
+	queueTag := queueCommand.String("tag", "", "Optional tag, for use with wait")
+
+	waitCommand := flag.NewFlagSet("wait", flag.ExitOnError)
+	waitSockPath := waitCommand.String("socket", "", "Path to daemon socket")
+	waitTag := waitCommand.String("tag", "", "Optional tag to filter on")
 
 	printDefaults := func() {
-		fmt.Println(fmt.Sprintf("Usage: \"%s daemon\" or \"%s queue\"", os.Args[0], os.Args[0]))
+		fmt.Println(fmt.Sprintf("Usage: \"%s daemon\", \"%s queue\" \"%s wait\"", os.Args[0], os.Args[0], os.Args[0]))
 
 		fmt.Println("\nUsage of daemon:")
 		daemonCommand.PrintDefaults()
 
 		fmt.Println("\nUsage of queue:")
 		queueCommand.PrintDefaults()
+
+		fmt.Println("\nUsage of wait:")
+		waitCommand.PrintDefaults()
 	}
 
 	if len(os.Args) <= 1 {
@@ -38,6 +47,8 @@ func main() {
 		daemonCommand.Parse(os.Args[2:])
 	case "queue":
 		queueCommand.Parse(os.Args[2:])
+	case "wait":
+		waitCommand.Parse(os.Args[2:])
 	}
 
 	if daemonCommand.Parsed() {
@@ -45,15 +56,30 @@ func main() {
 		if hook == "" {
 			panic("Missing required flag hook")
 		}
-		RunDaemon(stderr, hook, *retryInterval, *retries)
+		RunDaemon(stderr, hook, &DaemonConfig{
+			RetryInterval: *retryInterval,
+			Retries:       *retries,
+			Concurrency:   *concurrency,
+		})
 
 	} else if queueCommand.Parsed() {
-		sock := *sockPath
+		sock := *queueSockPath
 		if sock == "" {
 			panic("Missing required flag socket")
 		}
 
-		err := RunClient(sock)
+		err := RunQueueClient(sock, *queueTag)
+		if err != nil {
+			panic(err)
+		}
+
+	} else if waitCommand.Parsed() {
+		sock := *waitSockPath
+		if sock == "" {
+			panic("Missing required flag socket")
+		}
+
+		err := RunWaitClient(sock, *waitTag)
 		if err != nil {
 			panic(err)
 		}

@@ -48,7 +48,12 @@ func RunDaemon(stderr *log.Logger, realHook string, config *DaemonConfig) {
 	// Execute hook for one request.
 	execOne := func(m *QueueMessage) {
 		defer func() {
-			queueCompleted <- m
+			// Note: the main goroutine may be blocking trying to submit a job to us.
+			// Send the completion in a new goroutine to prevent blocking here as
+			// well, which would create a deadlock.
+			go func() {
+				queueCompleted <- m
+			}()
 		}()
 
 		env := os.Environ()

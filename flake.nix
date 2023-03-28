@@ -11,20 +11,13 @@
         flake-utils.follows = "flake-utils";
       };
     };
-    pre-commit-hooks = {
-      url = "github:cachix/pre-commit-hooks.nix";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-        flake-utils.follows = "flake-utils";
-      };
-    };
     treefmt-nix = {
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, devshell, treefmt-nix, pre-commit-hooks, ... }: {
+  outputs = { self, nixpkgs, flake-utils, devshell, treefmt-nix, ... }: {
     nixosModules.queued-build-hook = import ./module.nix;
     overlays.default = import ./overlay.nix { inherit self; };
   } // flake-utils.lib.eachDefaultSystem (system:
@@ -67,15 +60,6 @@
             value = "1";
           }
         ];
-        devshell.startup.pre-commit.text = (pre-commit-hooks.lib.${system}.run {
-          src = ./.;
-          hooks = {
-            check-format = {
-              enable = true;
-              entry = "treefmt --fail-on-change";
-            };
-          };
-        }).shellHook;
       };
 
       formatter = treefmt-nix.lib.mkWrapper pkgs treefmt.config;

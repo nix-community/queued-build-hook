@@ -90,7 +90,6 @@ in
             "async-nix-post-build-hook.socket"
           ];
           serviceConfig = {
-            Type = "notify";
             ExecStart = "${cfg.package}/bin/queued-build-hook daemon --hook ${hook}";
             FileDescriptorStoreMax = 1;
           };

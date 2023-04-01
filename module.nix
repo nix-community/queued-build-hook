@@ -60,7 +60,8 @@ in
       let
         enqueueScript = pkgs.writeShellScriptBin "enqueue-package" ''
           ${cfg.package}/bin/queued-build-hook queue --socket "${cfg.socketDirectory}/async-nix-post-build-hook.sock"
-        ''; in
+        '';
+      in
       "${enqueueScript}/bin/enqueue-package";
 
     systemd.sockets = {
@@ -89,9 +90,7 @@ in
             "async-nix-post-build-hook.socket"
           ];
           serviceConfig = {
-            Type = "notify";
             ExecStart = "${cfg.package}/bin/queued-build-hook daemon --hook ${hook}";
-            RestrictAddressFamilies = "AF_UNIX";
             FileDescriptorStoreMax = 1;
           };
         };

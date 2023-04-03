@@ -6,18 +6,18 @@ let
 in
 {
   options.queued-build-hook = {
-    enable = lib.mkEnableOption "queued-build-hook";
+    enable = mkEnableOption "queued-build-hook";
 
-    package = lib.mkOption {
-      type = lib.types.package;
+    package = mkOption {
+      type = types.package;
       default = queued-build-hook;
-      description = lib.mdDoc ''
+      description = mdDoc ''
         The queued-build-hook package to use.
       '';
     };
 
     socketDirectory = mkOption {
-      description = lib.mdDoc ''
+      description = mdDoc ''
         Path to store the queued-build-hook daemon's unix socket.
       '';
       default = "/var/lib/nix";
@@ -28,13 +28,13 @@ in
       type = types.str;
       example = "user";
       default = "root";
-      description = lib.mdDoc ''
+      description = mdDoc ''
         This users will have read/write access to the Unix socket.
       '';
     };
 
     socketGroup = mkOption {
-      description = lib.mdDoc ''
+      description = mdDoc ''
         The users in this group will have read/write access to the Unix socket.
       '';
       type = types.str;
@@ -42,7 +42,7 @@ in
     };
 
     retryInterval = mkOption {
-      description = lib.mdDoc ''
+      description = mdDoc ''
         The number of seconds between attempts to run the hook for a package after an initial failure.
       '';
       type = types.int;
@@ -50,7 +50,7 @@ in
     };
 
     retries = mkOption {
-      description = lib.mdDoc ''
+      description = mdDoc ''
         The maximum number of attempts that will be made to run the hook for a package before giving up and dropping the task altogether.
       '';
       type = types.int;
@@ -58,7 +58,7 @@ in
     };
 
     concurrency = mkOption {
-      description = lib.mdDoc ''
+      description = mdDoc ''
         Sets the maximum number of tasks that can be executed simultaneously.
         By default it is set to 0 which means there is no limit to the number of tasks that can be run concurrently.
       '';
@@ -67,7 +67,7 @@ in
     };
 
     enqueueScriptContent = mkOption {
-      description = lib.mdDoc ''
+      description = mdDoc ''
         The script's content responsible for enqueuing newly-built packages and passing them to the daemon.
         Although the default configuration should suffice, there may be situations that require customized handling of specific packages.
         For example, it may be necessary to process certain packages synchronously using the 'queued-build-hook wait' command, or to ignore certain packages entirely.
@@ -79,7 +79,7 @@ in
     };
 
     postBuildScriptContent = mkOption {
-      description = lib.mdDoc ''
+      description = mdDoc ''
         Specify the content of the script that will manage the newly built package.
         The script must be able to handle the OUT_PATHS environment variable, which contains a list of the paths to the newly built packages.
       '';
@@ -89,8 +89,21 @@ in
       type = types.str;
     };
 
+    credentials = mkOption {
+      description = mdDoc ''
+        Credentials to load by startup. Keys that are UPPER_SNAKE will be loaded as env vars. Values are absolute paths to the credentials.
+      '';
+      type = types.attrsOf types.str;
+      default = { };
+
+      example = {
+        AWS_SHARED_CREDENTIALS_FILE = "/run/keys/aws-credentials";
+        binary-cache-key = "/run/keys/binary-cache-key";
+      };
+    };
+
   };
-  config = lib.mkIf cfg.enable {
+  config = mkIf cfg.enable {
 
     nix.settings.post-build-hook =
       let
@@ -123,11 +136,29 @@ in
           requires = [
             "async-nix-post-build-hook.socket"
           ];
+          script = ''
+            set -euo pipefail
+            shopt -u nullglob
+            ls -l ''${CREDENTIALS_DIRECTORY}
+            # Load all credentials into env if they are in UPPER_SNAKE form.
+            if [[ -n "''${CREDENTIALS_DIRECTORY:-}" ]]; then
+              for file in "$CREDENTIALS_DIRECTORY"/*; do
+                key=$(basename "$file")
+                if [[ $key =~ ^[A-Z0-9_]+$ ]]; then
+                  echo "Environ $key"
+                  export "$key=$(< "$file")"
+                fi
+              done
+            fi
+            exec ${cfg.package}/bin/queued-build-hook daemon --hook ${hook} --retry-interval ${toString cfg.retryInterval} --retry-interval ${toString cfg.retries} --concurrency ${toString cfg.concurrency} 
+          '';
           serviceConfig = {
-            ExecStart = "${cfg.package}/bin/queued-build-hook daemon --hook ${hook} " +
-              "--retry-interval ${toString cfg.retryInterval} " +
-              "--retry-interval ${toString cfg.retries} " +
-              "--concurrency ${toString cfg.concurrency}";
+            DynamicUser = true;
+            User = "queued-build-hook";
+            Group = "queued-build-hook";
+            LoadCredential = mapAttrsToList (key: value: "${key}:${value}") cfg.credentials;
+            KillMode = "process";
+            Restart = "on-failure";
             FileDescriptorStoreMax = 1;
           };
         };

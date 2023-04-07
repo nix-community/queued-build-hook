@@ -139,7 +139,6 @@ in
           script = ''
             set -euo pipefail
             shopt -u nullglob
-            ls -l ''${CREDENTIALS_DIRECTORY}
             # Load all credentials into env if they are in UPPER_SNAKE form.
             if [[ -n "''${CREDENTIALS_DIRECTORY:-}" ]]; then
               for file in "$CREDENTIALS_DIRECTORY"/*; do

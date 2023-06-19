@@ -23,7 +23,7 @@ func ListenSystemdFds() ([]net.Listener, error) {
 		if err == nil {
 			return nil, err
 		} else if pid != os.Getpid() {
-			return nil, errors.New("Systemd pid mismatch")
+			return nil, errors.New("systemd pid mismatch")
 		}
 	}
 

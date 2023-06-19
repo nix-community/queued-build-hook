@@ -1,6 +1,5 @@
-{
-  pkgs ? import <nixpkgs> {}
-  , lib ? pkgs.lib
+{ pkgs ? import <nixpkgs> { }
+, lib ? pkgs.lib
 }:
 
 pkgs.buildGoPackage rec {

@@ -8,7 +8,6 @@ pkgs.nixosTest
     ci = { ... }: {
       imports = [ ./module.nix ];
 
-
       queued-build-hook = {
         enable = true;
         postBuildScriptContent = ''
@@ -17,6 +16,8 @@ pkgs.nixosTest
           echo "Uploading paths" $OUT_PATHS
           echo "We can access secret environment variable SECRET_ENV_VAR: ''${SECRET_ENV_VAR}"
           echo "We can access secret file secret_file: ''$(cat ''${CREDENTIALS_DIRECTORY}/secret_file)"
+          # Test Home/XDG directories
+          mkdir -p $HOME/.tmp
           exec ${pkgs.nix}/bin/nix copy --experimental-features nix-command --to "file:///var/nix-cache" $OUT_PATHS
         '';
         credentials = {
@@ -49,6 +50,7 @@ pkgs.nixosTest
     # Check that the service can access secrets
     ci.succeed("journalctl -o cat -u async-nix-post-build-hook.service | grep 'We can access secret environment variable SECRET_ENV_VAR: Tohgh3Th'")
     ci.succeed("journalctl -o cat -u async-nix-post-build-hook.service | grep 'We can access secret file secret_file: eQuei0xu'")
+    ci.succeed("test -d /var/lib/async-nix-post-build-hook/.tmp")
   '';
 }
 

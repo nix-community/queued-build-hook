@@ -31,6 +31,10 @@
           overlays = [ devshell.overlays.default ];
         };
         # treefmt-nix configuration
+        packages = {
+          queued-build-hook = pkgs.callPackage ./. { };
+        };
+
 
         treefmt = (treefmt-nix.lib.mkWrapper pkgs
           {
@@ -88,19 +92,19 @@
         };
         checks = {
           shell = self.devShells.${system}.default;
-          nixos-module-test = import ./test.nix { inherit pkgs; };
-          pre-commit-check = pre-commit-hooks.lib.${system}.run {
-            src = ./.;
-            hooks = {
-              treefmt-check =
-                {
-                  enable = true;
-                  entry = "${treefmt}/bin/treefmt --fail-on-change";
-                  pass_filenames = false;
-                };
+          pre-commit-check = pre-commit-hooks.lib.${system}.run
+            {
+              src = ./.;
+              hooks = {
+                treefmt-check =
+                  {
+                    enable = true;
+                    entry = "${treefmt}/bin/treefmt --fail-on-change";
+                    pass_filenames = false;
+                  };
+              };
             };
-          };
-        };
+        } // import ./tests { inherit pkgs system; };
 
         formatter = treefmt;
 

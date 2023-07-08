@@ -43,7 +43,7 @@ pkgs.nixosTest
   };
   testScript = ''
     start_all()
-    ci.succeed("nix-build --no-substitute -A hello '${<nixpkgs>}'")
+    ci.succeed("nix-build --no-substitute -A hello '${pkgs.path}'")
     # Cache should contain a .narinfo referring to "hello"
     ci.wait_until_succeeds("grep -l 'StorePath: /nix/store/[[:alnum:]]*-hello-.*' /var/nix-cache/*.narinfo")
     # Check that the service can access secrets

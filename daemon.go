@@ -161,7 +161,7 @@ func RunDaemon(stderr *log.Logger, realHook string, config *DaemonConfig) {
 			// Forward requests to workers, and track progress.
 			inProgress += 1
 			if m.Tag != "" {
-				n, _ := inProgressTags[m.Tag]
+				n := inProgressTags[m.Tag]
 				inProgressTags[m.Tag] = n + 1
 			}
 
@@ -204,7 +204,7 @@ func RunDaemon(stderr *log.Logger, realHook string, config *DaemonConfig) {
 				break
 			}
 			if w.Tag != "" {
-				n, _ := inProgressTags[w.Tag]
+				n := inProgressTags[w.Tag]
 				if n == 0 {
 					w.Reply <- struct{}{}
 					break
@@ -213,5 +213,4 @@ func RunDaemon(stderr *log.Logger, realHook string, config *DaemonConfig) {
 			waiters = append(waiters, w)
 		}
 	}
-
 }

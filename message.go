@@ -41,7 +41,7 @@ func EncodeMessage(m interface{}) ([]byte, error) {
 			Payload: b,
 		})
 	default:
-		return nil, errors.New("Invalid message")
+		return nil, errors.New("invalid message")
 	}
 }
 
@@ -62,6 +62,6 @@ func DecodeMessage(b []byte) (interface{}, error) {
 		err := json.Unmarshal(env.Payload, m)
 		return m, err
 	default:
-		return nil, errors.New("Invalid action")
+		return nil, errors.New("invalid action")
 	}
 }

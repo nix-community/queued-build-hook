@@ -8,7 +8,6 @@ import (
 )
 
 func main() {
-
 	stderr := log.New(os.Stderr, "queued-build-hook: ", 0)
 
 	daemonCommand := flag.NewFlagSet("daemon", flag.ExitOnError)
@@ -26,7 +25,7 @@ func main() {
 	waitTag := waitCommand.String("tag", "", "Optional tag to filter on")
 
 	printDefaults := func() {
-		fmt.Println(fmt.Sprintf("Usage: \"%s daemon\", \"%s queue\" \"%s wait\"", os.Args[0], os.Args[0], os.Args[0]))
+		fmt.Printf("Usage: \"%s daemon\", \"%s queue\" \"%s wait\"\n", os.Args[0], os.Args[0], os.Args[0])
 
 		fmt.Println("\nUsage of daemon:")
 		daemonCommand.PrintDefaults()
@@ -85,7 +84,7 @@ func main() {
 		}
 
 	} else {
+		printDefaults()
 		panic("No supported command parsed")
 	}
-
 }

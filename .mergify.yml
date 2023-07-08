@@ -2,6 +2,10 @@ queue_rules:
   - name: default
     merge_conditions:
       - check-success=Evaluate flake.nix
+      - check-success=check
+      - check-success=check nixos-module-test [x86_64-linux]
+      - check-success=check pre-commit-check [x86_64-linux]
+      - check-success=check shell [x86_64-linux]
       - check-success=devShell default [x86_64-linux]
       - check-success=package default [x86_64-linux]
       - check-success=package queued-build-hook [x86_64-linux]

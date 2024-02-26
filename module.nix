@@ -78,6 +78,14 @@ in
       type = types.str;
     };
 
+    postBuildScript = mkOption {
+      description = mdDoc ''
+        Specify the path to your postBuildScript
+      '';
+      type = types.nullOr types.path;
+      default = null;
+    };
+
     postBuildScriptContent = mkOption {
       description = mdDoc ''
         Specify the content of the script that will manage the newly built package.
@@ -86,7 +94,8 @@ in
       example = literalExpression ''
         exec nix copy --experimental-features nix-command --to "file:///var/nix-cache" $OUT_PATHS
       '';
-      type = types.str;
+      type = types.nullOr types.str;
+      default = null;
     };
 
     credentials = mkOption {
@@ -104,6 +113,12 @@ in
 
   };
   config = mkIf cfg.enable {
+
+    assertions =
+      [{
+        assertion = cfg.postBuildScript != null || cfg.postBuildScriptContent != null;
+        message = "Either postBuildScript or postBuildScriptContent must be set";
+      }];
 
     nix.settings.post-build-hook =
       let
@@ -127,7 +142,7 @@ in
 
     systemd.services =
       let
-        hook = pkgs.writeShellScript "hook" cfg.postBuildScriptContent;
+        hook = if (cfg.postBuildScript != null) then cfg.postBuildScript else (pkgs.writeShellScript "hook" cfg.postBuildScriptContent);
       in
       {
         async-nix-post-build-hook = {

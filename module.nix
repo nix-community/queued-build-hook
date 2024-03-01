@@ -151,6 +151,7 @@ in
             fi
             exec ${cfg.package}/bin/queued-build-hook daemon --hook ${hook} --retry-interval ${toString cfg.retryInterval} --retry-interval ${toString cfg.retries} --concurrency ${toString cfg.concurrency} 
           '';
+          environment.HOME = "/var/lib/async-nix-post-build-hook";
           serviceConfig = {
             DynamicUser = true;
             User = "queued-build-hook";
@@ -159,6 +160,7 @@ in
             KillMode = "process";
             Restart = "on-failure";
             FileDescriptorStoreMax = 1;
+            StateDirectory = "async-nix-post-build-hook";
           };
         };
       };

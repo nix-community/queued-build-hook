@@ -1,12 +1,10 @@
-{ pkgs ? import <nixpkgs> { }
-, lib ? pkgs.lib
-}:
+{ pkgs, system }:
 pkgs.nixosTest
 {
   name = "queued-build-hook";
   nodes = {
     ci = { ... }: {
-      imports = [ ./module.nix ];
+      imports = [ ../module.nix ];
 
       queued-build-hook = {
         enable = true;
@@ -18,6 +16,9 @@ pkgs.nixosTest
           echo "We can access secret file secret_file: ''$(cat ''${CREDENTIALS_DIRECTORY}/secret_file)"
           # Test Home/XDG directories
           mkdir -p $HOME/.tmp
+
+          ${pkgs.nix}/bin/nix-store --generate-binary-cache-key cache1.example.org /tmp/sk1 /tmp/pk1
+          ${pkgs.nix}/bin/nix --extra-experimental-features nix-command store sign --key-file /tmp/sk1 $OUT_PATHS
           exec ${pkgs.nix}/bin/nix copy --experimental-features nix-command --to "file:///var/nix-cache" $OUT_PATHS
         '';
         credentials = {
@@ -46,6 +47,7 @@ pkgs.nixosTest
     start_all()
     ci.succeed("nix-build --no-substitute -A hello '${pkgs.path}'")
     # Cache should contain a .narinfo referring to "hello"
+
     ci.wait_until_succeeds("grep -l 'StorePath: /nix/store/[[:alnum:]]*-hello-.*' /var/nix-cache/*.narinfo")
     # Check that the service can access secrets
     ci.succeed("journalctl -o cat -u async-nix-post-build-hook.service | grep 'We can access secret environment variable SECRET_ENV_VAR: Tohgh3Th'")

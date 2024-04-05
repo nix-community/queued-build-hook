@@ -164,7 +164,7 @@ in
                 fi
               done
             fi
-            exec ${cfg.package}/bin/queued-build-hook daemon --hook ${hook} --retry-interval ${toString cfg.retryInterval} --retry-interval ${toString cfg.retries} --concurrency ${toString cfg.concurrency} 
+            exec ${cfg.package}/bin/queued-build-hook daemon --hook ${hook} --retry-interval ${toString cfg.retryInterval} --retries ${toString cfg.retries} --concurrency ${toString cfg.concurrency}
           '';
           environment.HOME = "/var/lib/async-nix-post-build-hook";
           serviceConfig = {

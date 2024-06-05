@@ -1,8 +1,10 @@
 package main
 
 import (
+	"math"
 	"net"
 	"os"
+	"time"
 )
 
 func runClient(sock string, m interface{}) error {
@@ -11,9 +13,17 @@ func runClient(sock string, m interface{}) error {
 		return err
 	}
 
-	conn, err := net.Dial("unix", sock)
-	if err != nil {
-		return err
+	didFail := func(l []error) bool {
+		if len(l) > 10 {
+			return true
+		} else {
+			return false
+		}
+	}
+	conn, errs := tryConnect("unix", sock, expBackoff(2, 100*time.Millisecond), []error{}, didFail)
+
+	if errs != nil {
+		return errs[0]
 	}
 
 	unixConn := conn.(*net.UnixConn)
@@ -37,6 +47,22 @@ func runClient(sock string, m interface{}) error {
 	return nil
 }
 
+func tryConnect(network, addr string, retryDelay func([]error) time.Duration, prevErrors []error, hasFailed func([]error) bool) (net.Conn, []error) {
+	if hasFailed(prevErrors) {
+		return nil, prevErrors
+	} else {
+		conn, conn_err := net.Dial("unix", addr)
+		if conn != nil {
+			return conn, nil
+		}
+		errors := append(prevErrors, conn_err)
+		dur := retryDelay(errors)
+		time.Sleep(dur)
+		return tryConnect(network, addr, retryDelay, errors, hasFailed)
+	}
+	return nil, nil
+}
+
 func RunQueueClient(sock string, tag string) error {
 	return runClient(sock, &QueueMessage{
 		DrvPath:  os.Getenv("DRV_PATH"),
@@ -49,4 +75,11 @@ func RunWaitClient(sock string, tag string) error {
 	return runClient(sock, &WaitMessage{
 		Tag: tag,
 	})
+}
+
+func expBackoff(factor uint, start time.Duration) func(l []error) time.Duration {
+	return func(l []error) time.Duration {
+		n := len(l)
+		return time.Duration(int(math.Pow(float64(factor), float64(n)))) * start
+	}
 }

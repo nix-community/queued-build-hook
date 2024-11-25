@@ -2,12 +2,12 @@
 , lib ? pkgs.lib
 }:
 
-pkgs.buildGoPackage rec {
+pkgs.buildGoModule rec {
   name = "queued-build-hook-${version}";
   version = "git";
-  goPackagePath = "github.com/nix-community/queued-build-hook";
 
   src = lib.cleanSource ./.;
+  vendorHash = null;
 
   meta = {
     description = "Queue and retry Nix post-build-hook";

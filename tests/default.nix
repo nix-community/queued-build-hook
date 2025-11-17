@@ -1,4 +1,4 @@
-{ pkgs, system }:
+{ pkgs }:
 let
   lib = pkgs.lib;
 
@@ -9,7 +9,7 @@ let
         (name: _: lib.hasSuffix ".nix" name && name != "default.nix")
         (builtins.readDir ./.));
 
-  mkTest = fileName: import (./. + "/${fileName}") { inherit pkgs system; };
+  mkTest = fileName: import (./. + "/${fileName}") { inherit pkgs; };
 in
 if pkgs.stdenv.isLinux then
   lib.mapAttrs (_: mkTest) allTestFiles

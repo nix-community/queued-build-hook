@@ -1,5 +1,5 @@
-{ pkgs, system }:
-pkgs.nixosTest
+{ pkgs }:
+pkgs.testers.nixosTest
 {
   name = "queued-build-hook";
   nodes = {

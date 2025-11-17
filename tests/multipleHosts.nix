@@ -1,4 +1,4 @@
-{ pkgs, system }:
+{ pkgs }:
 let
   ciPrivateKey = pkgs.writeText "id_ed25519" ''
     -----BEGIN OPENSSH PRIVATE KEY-----
@@ -14,7 +14,7 @@ let
     ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJZNonUP1ePHLrvn0W9D2hdN6zWWZYFyJc+QR6pOKQEw bob@client
   '';
 in
-pkgs.nixosTest
+pkgs.testers.nixosTest
 {
   name = "queued-build-hook-multiple-hosts";
   nodes = {

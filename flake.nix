@@ -30,12 +30,8 @@
           inherit system;
           overlays = [ devshell.overlays.default ];
         };
+
         # treefmt-nix configuration
-        packages = {
-          queued-build-hook = pkgs.callPackage ./. { };
-        };
-
-
         treefmt = (treefmt-nix.lib.mkWrapper pkgs
           {
             projectRootFile = "flake.nix";
@@ -104,7 +100,7 @@
                   };
               };
             };
-        } // import ./tests { inherit pkgs system; };
+        } // import ./tests { inherit pkgs; };
 
         formatter = treefmt;
 
